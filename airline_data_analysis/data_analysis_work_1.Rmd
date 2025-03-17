@@ -1,0 +1,402 @@
+---
+title: "Veri Analitiğinin Temelleri"
+author: "Sude Gül ÜZÜM"
+#date: "`r Sys.Date()`"
+output:
+  html_document:
+  css: styles.css
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+# libraries
+library(knitr)
+library(ggplot2)
+library(readr)
+library(dplyr)
+theme_set(theme_classic())
+```
+
+
+## Veri Seti Hakkında Bilgi
+Bu veri seti, Airline Quality web sitesinden alınan 2023'teki en iyi 10 havayolunun incelemelerini içerir . İncelemeler, koltuk konforu, personel hizmeti, yiyecek ve içecekler, uçak içi eğlence, paranın karşılığı ve genel derecelendirme dahil olmak üzere uçuş deneyiminin çeşitli yönlerini kapsar.  
+
+## En iyi 10 Havayolu Şirketleri Listesi  
+**1.Singapore Airlines**  
+**2.Qatar Airways**  
+**3.All Nippon Airways**  
+**4.Emirates**  
+**5.Japan Airlines**  
+**6.Turkish Airlines**  
+**7.Air France  **  
+**8.Cathay Pacific Airways  **  
+**9.EVA Air  **  
+**10.Korean Air  **  
+
+## Veri Seti Üzerine Soru  
+
+**Genel Değerlendirme Puanı** (Overall_Rating) hangi faktörlerden etkilenmektedir?  
+
+Bu analizde aşağıdaki faktörlerin genel değerlendirme puanı üzerindeki etkisini inceleyeceğiz:  
+- **Koltuk konforu**  
+- **Personel hizmet kalitesi**  
+- **Yiyecek ve içecek seçenekleri**  
+- **Eğlence sistemi**  
+- **Fiyat-performans dengesi**  
+- **Koltuk sınıfı (Ekonomi, Business, First Class vb.)**  
+
+Ayrıca, farklı koltuk sınıflarındaki yolcuların değerlendirmelerini karşılaştırarak, hangi hizmet unsurlarının memnuniyeti daha fazla etkilediğini anlamaya çalışacağız.  
+
+## CSV Dosyasını Ekleme ve Verinin Özeti
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+library(readr)
+veri <- read.csv(file.choose(), stringsAsFactors = FALSE)
+summary(veri)
+```
+
+## Veri Temizleme ve keşifsel veri analizi
+
+Veri setimizdeki değişkenlerin türleri ve yapıları hakkında bilgiler.
+```{r, echo=FALSE}
+str(veri)
+```
+
+## 1.Veri Setimizde Eksik Değer Olup Olmadığını Kontrol Etmek
+
+```{r, echo=FALSE}
+# Eksik değer kontrolü
+sum(is.na(veri))
+```
+
+Veri setimiz 8256 satır 17 sütundan oluşmakta.
+```{r, echo=FALSE}
+# Veri setinin boyutları
+dim(veri)
+```
+
+
+## 2.Sütunlardaki Boşlukları Doldurmak
+Veri setindeki sütunlar arası boşluk sorunlara yol açabildiği için aralarına _ ve . ekliyoruz.
+```{r, echo=FALSE, stringsAsFactors = FALSE}
+colnames(veri) <- gsub(" ", "_", colnames(veri))
+colnames(veri)
+
+```
+
+```{r,warning=FALSE, echo=FALSE, }
+## Seat_Comfort sütununu chr'den int'e çevirmek
+veri$Seat_Comfort <- as.numeric(veri$Seat_Comfort)
+veri$Staff_Service <- as.numeric(veri$Staff_Service)
+veri$Food_Beverages <- as.numeric(veri$Food_Beverages)
+veri$Inflight_Entertainment <- as.numeric(veri$Inflight_Entertainment)
+veri$Value_For_Money <- as.numeric(veri$Value_For_Money)
+veri$Overall_Rating <- as.numeric(veri$Overall_Rating)
+str(veri)
+summary(veri$Seat_Comfort)  # NA değerleri olup olmadığını kontrol et
+veri <- na.omit(veri)
+
+```
+
+
+
+## Görselleştirme
+
+## 1. Uçuş Sınıfına Göre Koltuk Konforu ile Genel Memnuniyet İlişkisi
+Amaç: Koltuk Konforu (Seat_Comfort) ile genel memnuniyet arasında ilişki var mı?
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+veri$Class <- as.factor(veri$Class)
+
+# Grafik oluşturma
+ggplot(veri, aes(x = Seat_Comfort, y = Overall_Rating, color = Class)) +
+  geom_jitter(width = 0.2, alpha = 0.7) +  # Nokta grafiği (jitter ile dağılım)
+  geom_smooth(method = "lm", se = FALSE) +  # Regresyon çizgisi
+  labs(
+    title = "Uçuş Sınıfına Göre Koltuk Konforu ile Genel Memnuniyet İlişkisi",
+    x = "Koltuk Konforu (1-5)",
+    y = "Genel Memnuniyet Puanı",
+    color = "Koltuk Sınıfı"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 16, face = "bold"),
+    axis.title = element_text(size = 12),
+    legend.position = "bottom"
+  ) +
+  scale_color_brewer(palette = "Set1")  # Renk paleti
+```
+
+
+## 2. Uçuş Sınıfına Göre Personel Hizmet ile Genel Memnuniyet İlişkisi
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+veri$Class <- as.factor(veri$Class)
+
+# Grafik oluşturma
+ggplot(veri, aes(x = Staff_Service, y = Overall_Rating, color = Class)) +
+  geom_jitter(width = 0.2, alpha = 0.7) +  # Nokta grafiği (jitter ile dağılım)
+  geom_smooth(method = "lm", se = FALSE) +  # Regresyon çizgisi
+  labs(
+    title = "Uçuş Sınıfına Göre Personel Hizmet ile Genel Memnuniyet İlişkisi",
+    x = "Personel Hizmet Puanı",
+    y = "Genel Memnuniyet Puanı",
+    color = "Koltuk Sınıfı"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 16, face = "bold"),
+    axis.title = element_text(size = 12),
+    legend.position = "bottom"
+  ) +
+  scale_color_brewer(palette = "Dark2")  # Renk paleti
+```
+
+## 3. Uçuş Sınıfına Göre Yemek ve İçecek ile Genel Memnuniyet İlişkisi
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+veri$Class <- as.factor(veri$Class)
+
+# Grafik oluşturma
+ggplot(veri, aes(x = Food_Beverages, y = Overall_Rating, color = Class)) +
+  geom_jitter(width = 0.2, alpha = 0.7) +  # Nokta grafiği (jitter ile dağılım)
+  geom_smooth(method = "lm", se = FALSE) +  # Regresyon çizgisi
+  labs(
+    title = "Uçuş Sınıfına Göre Yemek ve İçecek ile Genel Memnuniyet İlişkisi",
+    x = "Yemek ve İçecek Puanı",
+    y = "Genel Memnuniyet Puanı",
+    color = "Koltuk Sınıfı"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 16, face = "bold"),
+    axis.title = element_text(size = 12),
+    legend.position = "bottom"
+  ) +
+  scale_color_brewer(palette = "Set1")  # Renk paleti
+```
+
+## 4. Uçuş Sınıfına Göre Eğlence Sistemi ile Genel Memnuniyet İlişkisi
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+veri$Class <- as.factor(veri$Class)
+
+# Grafik oluşturma
+ggplot(veri, aes(x = Inflight_Entertainment, y = Overall_Rating, color = Class)) +
+  geom_jitter(width = 0.2, alpha = 0.7) +  # Nokta grafiği (jitter ile dağılım)
+  geom_smooth(method = "lm", se = FALSE) +  # Regresyon çizgisi
+  labs(
+    title = "Uçuş Sınıfına Göre Eğlence Sistemi ile Genel Memnuniyet İlişkisi",
+    x = "Eğlence Sistemi Puanı (1-5)",
+    y = "Genel Memnuniyet Puanı",
+    color = "Koltuk Sınıfı"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 16, face = "bold"),
+    axis.title = element_text(size = 12),
+    legend.position = "bottom"
+  ) +
+  scale_color_brewer(palette = "Dark2")  # Renk paleti
+
+```
+
+## 5. Uçuş Sınıfına Göre Fiyat-Performans Dengesi ile Genel Memnuniyet İlişkisi
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+veri$Class <- as.factor(veri$Class)
+
+# Grafik oluşturma
+ggplot(veri, aes(x = Value_For_Money, y = Overall_Rating, color = Class)) +
+  geom_jitter(width = 0.2, alpha = 0.7) +  # Nokta grafiği (jitter ile dağılım)
+  geom_smooth(method = "lm", se = FALSE) +  # Regresyon çizgisi
+  labs(
+    title = "Uçuş Sınıfına Göre Fiyat-Performans Dengesi ile Genel Memnuniyet İlişkisi",
+    x = "Fiyat-Performans Dengesi Puanı (1-5)",
+    y = "Genel Memnuniyet Puanı",
+    color = "Koltuk Sınıfı"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 16, face = "bold"),
+    axis.title = element_text(size = 12),
+    legend.position = "bottom"
+  ) +
+  scale_color_brewer(palette = "Set1")  # Renk paleti
+```
+
+## Uçuş Sınıfına Göre Faktörlerin Etkisini Analiz Etme
+Farklı uçuş sınıflarında hangi faktörlerin daha önemli olduğunu inceleyelim.
+```{r , echo=FALSE, warning=FALSE, message=FALSE}
+print(veri %>%
+  group_by(Class) %>%
+  summarise(
+    Ort_Koltuk_Konforu = mean(Seat_Comfort, na.rm = TRUE),
+    Ort_Personel_Hizmeti = mean(Staff_Service, na.rm = TRUE),
+    Ort_Yiyecek_Icicek = mean(Food_Beverages, na.rm = TRUE),
+    Ort_Ucakici_Eglence = mean(Inflight_Entertainment, na.rm = TRUE),
+    Ort_Fiyat_Performans = mean(Value_For_Money, na.rm = TRUE)
+  ), width = Inf)
+
+```
+**1️⃣  Koltuk Konforu (Ort_Koltuk_Konforu)**  
+En yüksek konfor puanı: Premium Economy (3.72)  
+En düşük konfor puanı: Economy Class (3.35)  
+**-Yorum:**    
+Premium Economy'nin koltuk açısından daha rahat olduğu, Economy Class'ın ise en az konfor sunduğunu gösteriyor.    
+**2️⃣ Personel Hizmeti (Ort_Personel_Hizmeti**)    
+En yüksek puan: Premium Economy (4)  
+En düşük puan: First Class (3.10)  
+**-Yorum:**
+Premium Economy yolcuları personel hizmetinden en memnun olan grup.
+Şaşırtıcı bir şekilde, First Class yolcuları personel hizmetine en düşük puanı vermiş. Bu, First Class'taki hizmet beklentilerinin daha yüksek olduğunu ve tam karşılanmadığını gösterebilir.  
+**3️⃣ Yiyecek & İçecek (Ort_Yiyecek_Icicek) **  
+En yüksek puan: First Class (4.30)  
+En düşük puan: Premium Economy (2.97)  
+**-Yorum:**  
+First Class'ta sunulan yemekler ve içecekler açık ara en yüksek puanı alıyor.
+Premium Economy  sınıfta sunulan yemeklerin diğer sınıflara göre daha az beğenildiğini gösteriyor.  
+**4️⃣ Uçak İçi Eğlence (Ort_Ucakici_Eglence)**    
+En yüksek puan: First Class (4.00)  
+En düşük puan: Economy Class (3.63)  
+**-Yorum:**  
+Eğlence sistemi First Class'ta en yüksek puanı almış, ancak diğer sınıflarla aradaki fark çok büyük değil. Economy Class eğlence konusunda en düşük puanı almış ama yine de fena değil.  
+**5️⃣ Fiyat-Performans Değeri (Ort_Fiyat_Performans) **    
+En yüksek puan: First Class (4.50)  
+En düşük puan: Economy Class (2.92)  
+**-Yorum:**  
+Burada ilginç bir durum var! First Class en pahalı sınıf olmasına rağmen fiyat/performans açısından en yüksek puanı alıyor.    
+Bu, First Class yolcularının ödedikleri ücretin karşılığını aldıklarını düşündüğünü gösteriyor.
+Öte yandan, Economy Class en düşük fiyat/performans puanına sahip, bu da yolcuların bilet fiyatlarını sunulan hizmetlere göre pahalı bulduğunu gösteriyor.
+
+
+## Uçuş Sınıflarının Faktörler Üzerindeki Etkisinin Havayolu Şirketlerine Göre İncelenmesi
+```{r, echo=FALSE, warning=FALSE, message=FALSE,  fig.width = 11, fig.height = 10}
+# Gerekli kütüphaneleri yükle
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+
+# Uçuş sınıflarına göre ortalama faktör puanlarını havayollarına göre görselleştirme
+veri_filtreli <- veri %>%
+  group_by(Airline, Class) %>%
+  summarise(
+    Ort_Koltuk_Konforu = mean(Seat_Comfort, na.rm = TRUE),
+    Ort_Personel_Hizmeti = mean(Staff_Service, na.rm = TRUE),
+    Ort_Yiyecek_Icicek = mean(Food_Beverages, na.rm = TRUE),
+    Ort_Ucakici_Eglence = mean(Inflight_Entertainment, na.rm = TRUE),
+    Ort_Fiyat_Performans = mean(Value_For_Money, na.rm = TRUE)
+  ) %>%
+  pivot_longer(cols = starts_with("Ort_"), names_to = "Faktor", values_to = "Ortalama")
+
+ggplot(veri_filtreli, aes(x = Faktor, y = Ortalama, fill = Class)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  facet_wrap(~ Airline) + # Havayollarına göre alt grafikler oluştur
+  labs(title = "Havayolları ve Uçuş Sınıflarına Göre Ortalama Faktör Puanları",
+       x = "Faktörler",
+       y = "Ortalama Puan",
+       fill = "Uçuş Sınıfı") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+   scale_fill_manual(values = c("First Class"="#2a448a","Business Class" = "#4fa1eb", "Economy Class" = "#ff61a7","Premium Economy"="#d70073"))
+```
+
+## Korelasyon Analizi
+
+```{r , echo=FALSE, warning=FALSE, message=FALSE}
+# Korelasyon matrisi oluşturma
+correlation_matrix <- veri %>%
+  select(Seat_Comfort, Staff_Service, Food_Beverages, Inflight_Entertainment, Value_For_Money, Overall_Rating) %>%
+  cor()
+
+# Korelasyon matrisini görüntüleme
+print(correlation_matrix)
+
+# Korelasyon matrisini görselleştirme
+library(corrplot)
+corrplot(correlation_matrix, method = "circle")
+```
+
+**-Yorum:** Matristeki tüm korelasyonlar pozitif, yani değişkenler arasında doğru orantılı bir ilişki var. Bir değişken arttığında, diğer değişken de artma eğiliminde.
+
+**1️⃣ Value_For_Money" ve "Overall_Rating" Arasındaki Güçlü İlişki (0.91)**  
+"Paranın Karşılığı" ve "Genel Memnuniyet" arasında çok güçlü bir pozitif korelasyon var. Bu, müşterilerin aldıkları hizmetin fiyatını ne kadar uygun bulurlarsa, genel memnuniyetlerinin de o kadar yüksek olduğu anlamına gelir.
+
+**2️⃣  "Koltuk Konforu" (0.19), "Personel Hizmeti" (0.23), "Yiyecek ve İçecekler" (0.17) ve "Uçak İçi Eğlence" (0.18) **  faktörlerin hepsi "Genel Memnuniyet" ile pozitif korelasyona sahip. Ancak bu korelasyonlar, "Paranın Karşılığı" ile olan kadar güçlü değil.
+
+
+##  Havayolu Şirketlerinin Performans Karşılaştırması
+Amaç: Havayolu şirketlerinin genel puanlarını karşılaştırarak hangi şirketin en yüksek memnuniyeti sağladığını analiz edebilirsiniz.
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+# Havayolu şirketlerine göre genel puan ortalamaları
+veri %>%
+  group_by(Airline) %>%
+  summarise(Ortalama_Genel_Puan = mean(Overall_Rating, na.rm = TRUE)) %>%
+  arrange(desc(Ortalama_Genel_Puan))
+```
+
+##  Faktörlerin Genel Memnuniyet Üzerindeki Etkisini Ölçme
+Amaç: Doğrusal regresyon modelinin çıktısı, her bir faktörün genel memnuniyet (Overall_Rating) üzerindeki etkisini ve bu etkilerin istatistiksel olarak anlamlı olup olmadığını gösterir.
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+# Doğrusal regresyon modeli
+model <- lm(Overall_Rating ~ Seat_Comfort + Staff_Service + Food_Beverages + Inflight_Entertainment + Value_For_Money, data = veri)
+summary(model)
+```
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+library(ggplot2)
+
+# Katsayıları ve standart hataları içeren bir veri çerçevesi oluşturma
+coef_df <- data.frame(
+  Factor = c("Seat_Comfort", "Staff_Service", "Food_Beverages", "Inflight_Entertainment", "Value_For_Money"),
+  Coefficient = c(0.04194, 0.06541, 0.07714, -0.04730, 2.01819),
+  Std_Error = c(0.03690, 0.03267, 0.03464, 0.03860, 0.03152)
+)
+
+# Grafik çizimi
+ggplot(coef_df, aes(x = Factor, y = Coefficient)) +
+  geom_bar(stat = "identity", fill = "skyblue") +
+  geom_errorbar(aes(ymin = Coefficient - Std_Error, ymax = Coefficient + Std_Error), width = 0.2) +
+  labs(title = "Faktörlerin Genel Memnuniyet Üzerindeki Etkisi", x = "Faktörler", y = "Katsayı") +
+  theme_minimal()
+```
+
+**-Yorum:**  
+**-**Doğrusal regresyon modeli, her bir faktörün genel memnuniyet üzerindeki etkisini ve bu etkilerin istatistiksel olarak anlamlı olup olmadığını göstermektedir.  
+**-** "Paranın Karşılığı"nın genel memnuniyet üzerinde en güçlü pozitif etkiye sahip olduğu görülmektedir.  
+**-** Personel hizmeti ve yiyecek-içecek kalitesinin de genel memnuniyeti olumlu yönde etkilediği istatistiksel olarak anlamlı bulunmuştur.    
+**-** Koltuk konforu ve uçak içi eğlencenin genel memnuniyet üzerinde istatistiksel olarak anlamlı bir etkisi bulunmamıştır. 
+
+
+## Sonuç
+
+Uçuş sınıflarına göre faktörlerin etkisi ve havayolu şirketlerinin performans karşılaştırması yapılmıştır. Doğrusal regresyon modeli ile faktörlerin genel memnuniyet üzerindeki etkisi ölçülmüştür.  
+
+Analizler sonucunda, genel müşteri memnuniyetini etkileyen en önemli faktörün paranın karşılığı olduğu görülmüştür. Müşteriler, ödedikleri ücretin karşılığında aldıkları hizmetten memnun kaldıkları sürece genel olarak daha yüksek memnuniyet bildirmektedirler. Bununla birlikte, personel hizmeti ve yiyecek-içecek kalitesi de müşteri memnuniyetini önemli ölçüde etkileyen faktörler olarak tespit edilmiştir.
+
+Uçuş sınıfları arasında müşteri memnuniyeti açısından belirgin farklılıklar gözlemlenmiştir. First Class ve Business Class yolcularının genel memnuniyeti, Economy Class ve Premium Economy Class yolcularına göre daha yüksektir. Bu durum, sunulan hizmetlerin kalitesi ve çeşitliliği ile ilişkilendirilebilir.  
+
+Havayolu şirketleri, müşteri memnuniyetini artırmak için öncelikle fiyat-performans dengesine odaklanmalıdır. Hizmet kalitesini artırmak, personel eğitimine yatırım yapmak ve yiyecek-içecek seçeneklerini iyileştirmek de müşteri memnuniyetini olumlu yönde etkileyecektir. Özellikle Economy Class yolcularının memnuniyetini artırmak için fiyat-performans dengesi ve temel hizmet kalitesi iyileştirmelerine odaklanmak önemlidir.  
+
+
+
+**Havayolu Şirketlerinin Performans Karşılaştırması:**    
+
+Analiz, havayolu şirketlerinin genel puanlarını karşılaştırarak hangi şirketlerin en yüksek memnuniyeti sağladığını göstermektedir.  
+
+Qatar Airways ve EVA Air, en yüksek ortalama puanlara sahipken, Turkish Airlines en düşük ortalama puana sahiptir.  
+
+  
+  
+  
+**Faktörlerin Genel Memnuniyet Üzerindeki Etkisini Ölçme (Doğrusal Regresyon):** 
+
+
+ **Intercept (Kesme Noktası):** -1.07160, diğer tüm faktörler sıfır olduğunda genel memnuniyetin tahmini değeridir. Ancak bu durum pratikte mümkün olmayabilir.  
+
+**Seat_Comfort:** 0.04194, koltuk konforundaki bir birimlik artışın genel memnuniyeti 0.04194 birim artırdığını gösterir. Ancak p-değeri 0.2560 olduğu için bu etki istatistiksel olarak anlamlı değildir (p > 0.05).  
+
+**Staff_Service:** 0.06541, personel hizmetindeki bir birimlik artışın genel memnuniyeti 0.06541 birim artırdığını gösterir. p-değeri 0.0456 olduğu için bu etki istatistiksel olarak anlamlıdır (p < 0.05).  
+
+**Food_Beverages:** 0.07714, yiyecek ve içecek kalitesindeki bir birimlik artışın genel memnuniyeti 0.07714 birim artırdığını gösterir. p-değeri 0.0262 olduğu için bu etki istatistiksel olarak anlamlıdır (p < 0.05).  
+
+**Inflight_Entertainment:** -0.04730, uçuş eğlencesindeki bir birimlik artışın genel memnuniyeti 0.04730 birim azalttığını gösterir. Ancak p-değeri 0.2207 olduğu için bu etki istatistiksel olarak anlamlı değildir (p > 0.05).  
+
+**Value_For_Money:** 2.01819, paranın karşılığını alma algısındaki bir birimlik artışın genel memnuniyeti 2.01819 birim artırdığını gösterir. p-değeri < 2e-16 olduğu için bu etki istatistiksel olarak çok anlamlıdır (p < 0.001).  
+
+**Multiple R-squared:** 0.8357, modelin genel memnuniyetin varyansının %83.57'sini açıkladığını gösterir. Bu, modelin oldukça iyi bir uyum sağladığını gösterir.  
+
