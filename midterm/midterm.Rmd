@@ -1,0 +1,603 @@
+---
+title: "Veri Analitiği Temelleri Vize Ödevi"
+author: "Sude Gül ÜZÜM"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+# Kütüphaneleri yükleme
+library(tidyverse)
+library(readr)
+library(ggplot2)
+library(corrplot)
+library(knitr)
+library(dplyr)
+library(visdat)
+library(naniar)
+library(patchwork)
+library(gridExtra)    # grid.arrange için
+library(moments)      # çarpıklık ve basıklık için
+library(nortest)      # normallik testleri için
+library(kableExtra) 
+library(sf)
+library(stringr)
+library(geodata)
+library(ggrepel)
+```
+
+
+## Cinsiyete göre bireylerin yaşadığı çevrede gece yalnız yürürken kendini güvende hissetme durumu, 2011-2020
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+guven <- read.csv(file.choose(), stringsAsFactors = FALSE)
+summary(guven)
+```
+
+## Veri Setindeki Sütunlar ve Tipleri
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+str(guven)
+```
+
+## Veri Setinin Boyutları
+```{r, echo=FALSE}
+guven_durumu <- dim(guven)
+cat(paste0("- Güven veri setindeki toplam satır: ", guven_durumu[1], ", sütun: ", guven_durumu[2], "\n"))
+```
+
+## 3. Düzeyde, Suç Türü ve Suçun İşlendiği ile Göre Ceza İnfaz Kurumuna Giren Hükümlüler, 2011-2020
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+suc <- read.csv(file.choose(), stringsAsFactors = FALSE)
+summary(suc)
+```
+
+## Veri Setindeki Sütunlar ve Tipleri
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+str(suc)
+```
+## Veri Setinin Boyutları
+```{r, echo=FALSE}
+suclar <- dim(suc)
+cat(paste0("- Suçlar veri setindeki toplam satır: ", suclar[1], ", sütun: ", suclar[2], "\n"))
+```
+
+## Eksik Veri Analizi
+```{r eksik-veri-kontrol, echo=FALSE, warning=FALSE, message=FALSE, results='asis'}
+sum_na_guven <- sum(is.na(guven))
+sum_na_suc <- sum(is.na(suc))
+miss_suc <- miss_var_summary(suc)
+
+cat(paste0("- Güven veri setindeki toplam eksik değer sayısı: ", sum_na_guven, "\n"))
+cat(paste0("- Suç veri setindeki toplam eksik değer sayısı: ", sum_na_suc, "\n\n"))
+
+#print(kable(miss_suc, caption = "Suç Veri Setindeki Eksik Değer Detayları"))
+```
+
+## Sürekli Değişkenlerin Dağılım Analizi
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+guven_long <- guven %>%
+  pivot_longer(cols = starts_with("y"), 
+               names_to = "Yil", 
+               values_to = "Yuzde") %>%
+  mutate(Yil = as.numeric(str_remove(Yil, "y")))
+
+ggplot(guven_long, aes(x = Yuzde)) +
+  geom_histogram(aes(y = ..density..), bins = 15, fill = "lightblue", color = "black") +
+  geom_density(color = "red", size = 1) +
+  facet_wrap(~Guven_Derecesi, scales = "free") +
+  labs(title = "Güven Derecelerinin Dağılımı (2011-2020)")
+
+```
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+guven_long <- guven %>%
+  pivot_longer(cols = starts_with("y"), 
+               names_to = "Yil", 
+               values_to = "Yuzde") %>%
+  mutate(
+    Yil = as.numeric(str_remove(Yil, "y")),
+    Cinsiyet = case_when(
+      str_starts(Guven_Derecesi, "E_") ~ "Erkek",
+      str_starts(Guven_Derecesi, "K_") ~ "Kadin",
+      TRUE ~ "Toplam"
+    ),
+    Guven_Seviyesi = factor(
+      str_remove(Guven_Derecesi, "^[TEK]_"),
+      levels = c("Cok_Guvenli", "Guvenli", "Notr", "Guvensiz", "Cok_Guvensiz"),
+      labels = c("Cok Guvenli", "Guvenli", "Notr", "Guvensiz", "Cok Guvensiz")
+    )
+  ) %>%
+  filter(Cinsiyet != "Toplam")
+
+options(repr.plot.width = 12, repr.plot.height = 8)
+
+ggplot(guven_long, aes(x = Yuzde, fill = Cinsiyet)) +
+  geom_histogram(
+    aes(y = ..density..),
+    bins = 15,
+    alpha = 0.7,
+    position = "identity",
+    color = "black"
+  ) +
+  geom_density(aes(color = Cinsiyet), size = 1, alpha = 0.5) +
+  facet_wrap(
+    ~Guven_Seviyesi, 
+    scales = "free",
+    ncol = 3,
+    labeller = label_wrap_gen(width = 15)
+  ) +
+  scale_fill_manual(values = c("Erkek" = "lightblue", "Kadin" = "red")) +
+  scale_color_manual(values = c("Erkek" = "lightblue", "Kadin" = "red")) +
+  labs(
+    title = "Cinsiyetlere Göre Güven Seviyelerinin Dağılımı",
+    x = "Guven Duzeyi (%)",
+    y = "Göreli Sıklık (Yoğunluk)",
+    caption = "Yoğunluk eğrileri dağılımın şeklini, çubuklar gerçek frekansları gösterir"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    strip.text = element_text(size = 10, face = "bold", margin = margin(b = 10)),
+    axis.text = element_text(size = 9),
+    axis.title = element_text(size = 11),
+    legend.position = "bottom",
+    legend.text = element_text(size = 10),
+    panel.spacing = unit(1.5, "lines"),
+    plot.title = element_text(hjust = 0.5, size = 14, face = "bold")
+  )
+```
+
+## Normallik ve Çarpıklık Analizi Cinsiyetlere Göre Analiz Fonksiyonu
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+# Veriyi filtreleme ve düzenleme (Türkçe karakterler kaldırıldı)
+guven_kadin_erkek <- guven %>%
+  pivot_longer(cols = starts_with("y"), 
+               names_to = "Yil", 
+               values_to = "Yuzde") %>%
+  filter(str_detect(Guven_Derecesi, "^E_|^K_")) %>% # Sadece Erkek ve Kadın verileri
+  mutate(
+    Cinsiyet = ifelse(str_detect(Guven_Derecesi, "^E_"), "Erkek", "Kadin"),
+    Guven_Seviyesi = gsub("^[EK]_", "", Guven_Derecesi),
+    Yil = as.numeric(gsub("y", "", Yil))
+  ) %>%
+  select(-Guven_Derecesi)
+
+# Analiz fonksiyonu (Türkçe karakterler kaldırıldı)
+analyze_by_gender <- function(data) {
+  results <- data.frame()
+  
+  for(gender in c("Erkek", "Kadin")) {
+    for(level in unique(data$Guven_Seviyesi)) {
+      temp_data <- data %>% filter(Cinsiyet == gender, Guven_Seviyesi == level)
+      
+      skew <- skewness(temp_data$Yuzde)
+      kurt <- kurtosis(temp_data$Yuzde)
+      shapiro_p <- shapiro.test(temp_data$Yuzde)$p.value
+      
+      results <- rbind(results, data.frame(
+        Cinsiyet = gender,
+        Guven_Seviyesi = level,
+        Carpiklik = round(skew, 3), # Türkçe karakter kaldırıldı
+        Basiklik = round(kurt, 3), # Türkçe karakter kaldırıldı
+        Shapiro_p = format.pval(shapiro_p),
+        Normal_Dagilim = ifelse(shapiro_p > 0.05, "Evet", "Hayir"), # Türkçe karakter kaldırıldı
+        Carpiklik_Yonu = ifelse(skew > 0, "Saga", "Sola") # Türkçe karakter kaldırıldı
+      ))
+    }
+  }
+  return(results)
+}
+
+# Analiz sonuçlarını görüntüleme
+dagilim_sonuclari <- analyze_by_gender(guven_kadin_erkek)
+print(dagilim_sonuclari)
+```
+
+## Q-Q plot grafikleri
+Amaç: Verilerin Normal dağılıma ne kadar uygun olduğunu kontrol etmek için kullanılır.
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+ggplot(guven_long, aes(sample = Yuzde)) +
+
+stat_qq() +
+
+stat_qq_line(color = "red") +
+
+facet_wrap(~Guven_Derecesi, ncol = 5, scales = "free") +
+
+labs(title = "Normallik Kontrolu: Q-Q Plotlar",
+    x = "Teorik Normal Dağılım Kantilleri (Standart Normal Değerler)",
+    y = "Gözlemlenen Veri Kantilleri (Yüzde Değerleri)") 
+```
+
+## Zaman Serisi Grafikleri
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+ggplot(guven_kadin_erkek, aes(x = Yil, y = Yuzde, color = Cinsiyet)) +
+  geom_line(size = 1) +
+  geom_point(size = 2) +
+  facet_wrap(~Guven_Seviyesi, scales = "free_y") +
+  ggtitle("Yıllara Göre Kadın ve Erkek Güven Derecesi Değişimi") +
+  scale_color_manual(values = c("Erkek" = "lightblue", "Kadin" = "red")) +
+  theme_minimal() +
+  scale_x_continuous(breaks = seq(2011, 2020, ))
+```
+
+
+## Suç Türlerine Göre Cinsiyet Dağılımı
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+suc_long <- suc %>%
+  pivot_longer(
+    cols = -c(Sucun_Islendigi_Il, Yil, Cinsiyet),
+    names_to = "Suc_Turu",
+    values_to = "Sayi"
+  )
+
+ggplot(suc_long, aes(x = Suc_Turu, y = Sayi, fill = Cinsiyet)) +
+  geom_col(position = "dodge", alpha = 0.8, width = 0.7) +
+  scale_fill_manual(values = c("Erkek" = "lightblue", "Kadın" = "red")) +
+  labs(
+    title = "Suç Türlerine Göre Cinsiyet Dağılımı",
+    x = NULL, # X ekseni başlığını kaldırdık
+    y = "Suç Sayısı",
+    fill = NULL # Cinsiyet legend başlığını kaldırdık
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold"),
+    axis.text.x = element_text(angle = 45, hjust = 1, size = 10),
+    legend.position = "top", # Göstergeleri üste aldık
+    panel.grid.major.x = element_blank() # Dikey grid çizgilerini kaldırdık
+  ) +
+  scale_y_continuous(
+    labels = scales::number_format(accuracy = 1), # Binlik ayraçsız tam sayılar
+    breaks = function(x) pretty(x, n = 5) # Otomatik iyi aralıklar
+  )
+```
+
+## Her Bir Suç Türü için Sürekli Değişkenlerin Dağılım ve Q-Q Plot Analizi
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+
+# Sürekli değişkenleri seçme (il, yıl ve cinsiyet hariç)
+continuous_vars <- names(suc)[!names(suc) %in% c("Sucun_Islendigi_Il", "Yil", "Cinsiyet")]
+
+# 1. Dağılım Görselleştirme
+for (var in continuous_vars) {
+  # Histogram + Yoğunluk eğrisi
+  p1 <- ggplot(suc, aes(x = .data[[var]])) +
+    geom_histogram(aes(y = ..density..), bins = 30, fill = "lightblue", alpha = 0.7) +
+    geom_density(color = "red", linewidth = 1) +
+    ggtitle(paste(var, "Dağılımı")) +
+    theme_minimal()
+  
+  # Q-Q plot
+  p2 <- ggplot(suc, aes(sample = .data[[var]])) +
+    stat_qq() + stat_qq_line(color = "blue") +
+    ggtitle(paste(var, "Q-Q Plotu")) +
+    theme_minimal()
+  
+  print(gridExtra::grid.arrange(p1, p2, ncol = 2))
+}
+
+# 2. Normallik ve Çarpıklık Analizi
+normallik_sonuclari <- data.frame(
+  Degisken = character(),
+  Shapiro_p = numeric(),
+  Carpiklik = numeric(),
+  Carpiklik_Yon = character(),
+  stringsAsFactors = FALSE
+)
+
+for (var in continuous_vars) {
+  # Normallik testi (Shapiro-Wilk)
+  shapiro_test <- shapiro.test(suc[[var]])
+  
+  # Çarpıklık ölçümü
+  skew <- skewness(suc[[var]], na.rm = TRUE)
+  
+  # Çarpıklık yönü
+  skew_dir <- ifelse(skew > 0, "Sağa çarpık", 
+                    ifelse(skew < 0, "Sola çarpık", "Simetrik"))
+  
+  normallik_sonuclari <- rbind(normallik_sonuclari, data.frame(
+    Degisken = var,
+    Shapiro_p = round(shapiro_test$p.value, 4),
+    Carpiklik = round(skew, 2),
+    Carpiklik_Yon = skew_dir
+  ))
+}
+
+# Sonuçları görüntüleme
+#print(normallik_sonuclari)
+
+# 3. Özet Tablo (Normallik ve Çarpıklık)
+knitr::kable(normallik_sonuclari, caption = "Normallik Testi ve Çarpıklık Sonuçları")
+```
+
+## Kategorik Değişkenlerin Frekanslarını Hesaplama
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+guven_long <- guven %>%
+  pivot_longer(
+    cols = starts_with("y"),
+    names_to = "Yil",
+    values_to = "Yuzde"
+  ) %>%
+  mutate(
+    Yil = as.numeric(gsub("y", "", Yil)),
+    Cinsiyet = case_when(
+      grepl("^E_", Guven_Derecesi) ~ "Erkek",
+      grepl("^K_", Guven_Derecesi) ~ "Kadın",
+      grepl("^T_", Guven_Derecesi) ~ "Toplam",
+      TRUE ~ NA_character_
+    ),
+    Guven_Derecesi = gsub("^[EKT]_", "", Guven_Derecesi)
+  )
+
+# Frekans dağılımlarını hesaplama
+frekanslar <- guven_long %>%
+  group_by(Cinsiyet, Guven_Derecesi) %>%
+  summarise(
+    Ortalama_Yuzde = mean(Yuzde),
+    Std_Dev = sd(Yuzde),
+    .groups = 'drop'
+  )
+
+print(frekanslar)
+```
+
+## Güven Derecesi Korelasyon Matrisi
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+# Yılları sütunlardan satırlara dönüştürme
+guven_long <- guven %>%
+  pivot_longer(
+    cols = starts_with("y"),
+    names_to = "Yil",
+    values_to = "Yuzde"
+  ) %>%
+  mutate(
+    Yil = as.numeric(gsub("y", "", Yil)),
+    Cinsiyet = case_when(
+      grepl("^E_", Guven_Derecesi) ~ "Erkek",
+      grepl("^K_", Guven_Derecesi) ~ "Kadın",
+      grepl("^T_", Guven_Derecesi) ~ "Toplam"
+    ),
+    Guven_Derecesi = gsub("^[EKT]_", "", Guven_Derecesi)
+  )
+
+# Toplam veri için korelasyon matrisi (yıllar sütunlarda)
+cor_data <- guven_long %>%
+  filter(Cinsiyet == "Toplam") %>%
+  select(-Cinsiyet) %>%
+  pivot_wider(
+    names_from = Guven_Derecesi,
+    values_from = Yuzde
+  ) %>%
+  select(-Yil)
+
+cor_matrix <- cor(cor_data, use = "complete.obs")
+
+corrplot(cor_matrix,
+         method = "color",
+         type = "upper",
+         tl.col = "black",
+         addCoef.col = "black",
+         number.cex = 0.7,
+         title = "Güven Dereceleri Arasındaki Korelasyon (Toplam)")
+```
+Daireler: Her bir güven derecesi çifti arasındaki ilişkinin gücünü ve yönünü temsil eder.  
+Mavi Daireler: Pozitif bir ilişki olduğunu gösterir. Yani, bir güven derecesi arttıkça diğeri de artma eğilimindedir. 
+Daire ne kadar büyük ve koyu mavi ise ilişki o kadar güçlüdür.  
+Kırmızı Daireler: Negatif bir ilişki olduğunu gösterir. Yani, bir güven derecesi arttıkça diğeri azalma eğilimindedir. Daire ne kadar büyük ve koyu kırmızı ise ilişki o kadar güçlüdür.  
+Küçük veya Renksiz Daireler: Zayıf veya neredeyse hiç ilişki olmadığını gösterir.  
+
+## Cinsiyete Göre Ayrı Analiz
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+# Erkek ve Kadın için ayrı korelasyonlar
+erkek_cor <- guven_long %>%
+  filter(Cinsiyet == "Erkek") %>%
+  select(-Cinsiyet) %>%
+  pivot_wider(names_from = Guven_Derecesi, values_from = Yuzde) %>%
+  select(-Yil) %>%
+  cor(use = "complete.obs")
+
+kadin_cor <- guven_long %>%
+  filter(Cinsiyet == "Kadın") %>%
+  select(-Cinsiyet) %>%
+  pivot_wider(names_from = Guven_Derecesi, values_from = Yuzde) %>%
+  select(-Yil) %>%
+  cor(use = "complete.obs")
+
+# Yan yana görselleştirme
+par(mfrow = c(1, 2))
+corrplot(erkek_cor, title = "Erkek", mar = c(0, 0, 1, 0))
+corrplot(kadin_cor, title = "Kadın", mar = c(0, 0, 1, 0))
+```
+
+## Toplam Suç Haritası (Her İl İçin Tüm Suçların Toplamı)
+```{r,setup-sf, echo=FALSE, warning=FALSE, message=FALSE, fig.width=16, fig.height=12, out.width="100%"}
+turkey_il <- geodata::gadm(country = "TUR", level = 1, path = tempdir()) %>% 
+  st_as_sf()
+
+# 2. TÜM YILLARIN TOPLAMI (2011-2020)
+# İl isimlerini düzelt
+suc$Sucun_Islendigi_Il <- str_trim(suc$Sucun_Islendigi_Il)
+
+# Tüm yıllar için toplam suç sayısını hesapla (Cinsiyet ve Yıl'a göre gruplama)
+suc_toplam <- suc %>%
+  group_by(Sucun_Islendigi_Il) %>%
+  summarise(
+    Toplam_Suc = sum(across(where(is.numeric)), na.rm = TRUE),  # Tüm sayısal sütunları topla
+    .groups = "drop"
+  )
+
+# 3. Harita verisiyle birleştir
+turkey_il$NAME_1 <- str_trim(turkey_il$NAME_1)
+harita <- left_join(turkey_il, suc_toplam, by = c("NAME_1" = "Sucun_Islendigi_Il"))
+
+# 4. Gelişmiş harita görselleştirme
+ggplot(harita) +
+  geom_sf(aes(fill = Toplam_Suc), color = "white", size = 0.3) +
+  scale_fill_gradientn(
+    colors = c("#f7fbff", "#9ecae1", "#3182bd", "#08519c"),
+    na.value = "grey90",
+    name = "Toplam Suç Sayısı\n(2011-2020)",
+    labels = scales::comma,
+    trans = "sqrt"  # Büyük sayı farkları için karekök dönüşümü
+  ) +
+  # Tüm il isimleri (okunaklı şekilde)
+  geom_sf_text(
+    aes(label = NAME_1), 
+    size = 2.8,
+    color = "black",
+    fontface = "bold",
+    check_overlap = FALSE  # Tüm etiketleri göster
+  ) +
+  theme_void() +
+  labs(
+    title = "Türkiye İlleri Toplam Suç Dağılımı",
+    subtitle = "2011-2020 Yılları Arası Tüm Suçların Toplamı",
+  ) +
+  theme(
+    plot.title = element_text(size = 18, hjust = 0.5, margin = margin(b = 10)),
+    plot.subtitle = element_text(size = 14, hjust = 0.5, color = "gray40"),
+    legend.position = "bottom",
+    legend.title = element_text(size = 12),
+    legend.text = element_text(size = 10)
+  )
+```
+
+
+
+
+## Suç türlerinin Güven Oranıyla İlişkisi
+```{r , echo=FALSE, warning=FALSE, message=FALSE, fig.width=14, fig.height=8}
+# Guven_Derecesi'ni ayır
+guven_veri_long <- guven %>%
+  pivot_longer(cols = starts_with("y"), names_to = "Yil", values_to = "Oran") %>%
+  mutate(
+    Cinsiyet = case_when(
+      startsWith(Guven_Derecesi, "E_") ~ "Erkek",
+      startsWith(Guven_Derecesi, "K_") ~ "Kadın",
+      TRUE ~ "Toplam"
+    ),
+    Derece = sub("^[EK]_?", "", Guven_Derecesi),
+    Yil = as.integer(gsub("y", "", Yil))
+  ) %>%
+  select(Cinsiyet, Yil, Derece, Oran)
+
+suc_veri_long <- suc %>%
+  pivot_longer(cols = -(1:3), names_to = "Suc_Turu", values_to = "Sayi")
+
+birlesik_veri <- left_join(suc_veri_long, guven_veri_long, by = c("Cinsiyet", "Yil"))
+
+library(ggplot2)
+ggplot(birlesik_veri %>% filter(Derece == "Guvenli"), 
+       aes(x = Oran, y = Sayi, color = Suc_Turu)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE) +
+  facet_wrap(~Suc_Turu, scales = "free_y") +
+  labs(title = "Güven Oranı ile Suç Sayısı İlişkisi", x = "Güven Oranı", y = "Suç Sayısı")
+
+```
+
+## Korelasyon Analizi
+Korelasyon değeri:
+
+0.7 – 1.0 → güçlü pozitif
+
+0.4 – 0.7 → orta pozitif
+
+0.1 – 0.4 → zayıf pozitif
+
+-0.1 – 0.1 → ilişki yok
+
+-1.0 – -0.7 → güçlü negatif
+
+```{r , echo=FALSE, warning=FALSE, message=FALSE}
+cor_results <- birlesik_veri %>%
+  filter(Derece == "Guvenli") %>%
+  group_by(Suc_Turu) %>%
+  summarise(correlation = cor(Oran, Sayi, use = "complete.obs"))
+
+```
+
+```{r , echo=FALSE, warning=FALSE, message=FALSE}
+lm_model <- lm(Sayi ~ Oran, data = birlesik_veri %>% filter(Derece == "Guvenli"))
+summary(lm_model)
+
+```
+
+
+## Yıllara Göre Ortalama Güven Oranı ile Toplam Suç Sayısı Arasındaki İlişki
+```{r , echo=FALSE, warning=FALSE, message=FALSE}
+# 1. Suc veri setindeki suç türlerini topla
+suc_yillik <- suc %>%
+  mutate(
+    Toplam_Suc = Oldurme + Yaralama + Cinsel_Suclar + Kisiyi_Hurriyetinden_Yoksun_Kilma + 
+                  Hakaret + Hirsizlik + Uyusturucu_Madde_Imal_ve_Ticareti + 
+                  Uyusturucu_Madde_Kullanma_Satin_Alma + Kotu_Muamele + 
+                  Kacakcilik + Silah_ve_Bicakli_Suclar + Tehdit
+  ) %>%
+  group_by(Yil) %>%
+  summarise(Toplam_Suc = sum(Toplam_Suc, na.rm = TRUE)) %>%
+  mutate(Yil = as.character(Yil))  # Yil'ı karakter olarak ayarla
+
+# 2. Guven tablosunu uzun formata çevir
+guven_long <- guven %>%
+  pivot_longer(
+    cols = starts_with("y"),
+    names_to = "Yil",
+    names_prefix = "y",      # y2011 → 2011
+    values_to = "Oran",
+    names_repair = "unique"  # Çakışan isimler için otomatik düzeltme
+  )
+
+# 3. Yalnızca Toplam (T_) kategorilerini filtrele
+guven_toplam <- guven_long %>%
+  filter(startsWith(Guven_Derecesi, "T_")) %>%
+  mutate(
+    Yil = as.character(Yil)
+  )
+
+# 4. Her yıl için güven skorunu hesapla
+guven_toplam <- guven_toplam %>%
+  mutate(
+    Skor = case_when(
+      Guven_Derecesi == "T_Cok_Guvenli" ~ 2,
+      Guven_Derecesi == "T_Guvenli" ~ 1,
+      Guven_Derecesi == "T_Notr" ~ 0,
+      Guven_Derecesi == "T_Guvensiz" ~ -1,
+      Guven_Derecesi == "T_Cok_Guvensiz" ~ -2,
+      TRUE ~ NA_real_
+    ),
+    Aritmetik_Skor = Oran * Skor
+  )
+
+# 5. Yıla göre ortalama skor hesapla
+guven_yillik <- guven_toplam %>%
+  group_by(Yil) %>%
+  summarise(
+    Guven_Ort = sum(Aritmetik_Skor, na.rm = TRUE) / sum(Oran, na.rm = TRUE)
+  )
+
+# 6. Yıl bilgisi karakter olsun
+guven_yillik$Yil <- as.character(guven_yillik$Yil)
+
+# 7. Suc veri seti ile güven verisini birleştir
+guven_suc_yillik <- left_join(guven_yillik, suc_yillik, by = "Yil")
+
+# 8. Korelasyon
+correlation <- cor(guven_suc_yillik$Guven_Ort, guven_suc_yillik$Toplam_Suc)
+print(paste("Guven ile Suc arasındaki korelasyon:", round(correlation, 3)))
+
+# 9. Grafik
+ggplot(guven_suc_yillik, aes(x = Guven_Ort, y = Toplam_Suc)) +
+  geom_point(size = 3, color = "steelblue") +
+  geom_smooth(method = "lm", se = FALSE, color = "red") +
+  geom_text(aes(label = Yil), hjust = 1.2, vjust = 0.5, size = 3) +
+  labs(
+    title = "Ortalama Guven Skoru vs. Toplam Suc Sayisi",
+    x = "Ortalama Guven Skoru",
+    y = "Toplam Suc Sayisi"
+  ) +
+  theme_minimal()
+
+```
+
